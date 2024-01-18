@@ -10,13 +10,7 @@ import io.vertx.ext.web.Router;
 import io.vertx.ext.web.RoutingContext;
 import io.vertx.ext.web.handler.BodyHandler;
 
-import java.sql.Date;
-import java.text.SimpleDateFormat;
-import java.time.Instant;
-import java.time.LocalDateTime;
-import java.time.ZoneId;
-import java.time.ZoneOffset;
-import java.time.format.DateTimeFormatter;
+import java.util.Arrays;
 
 public class MainVerticle extends AbstractVerticle {
 
@@ -32,16 +26,52 @@ public class MainVerticle extends AbstractVerticle {
 
     sqlClient = JDBCClient.createShared(vertx, dbConfig);
 
+    createTables();
+
     Router router = Router.router(vertx);
 
     router.route().handler(BodyHandler.create());
 
-    // Define a route for handling /api/users
     router.get("/api").handler(ctx -> {
       ctx.request().response().end("Hello!");
     });
 
-    router.get("/api").handler(this::easy);
+
+//    All APIs instructions
+    router.get("/").handler(routingContext -> {
+      routingContext.response().putHeader("content-type", "text/html").end(
+        "<!DOCTYPE html>\n" +
+          "<html lang=\"en\">\n" +
+          "<head>\n" +
+          "  <meta charset=\"UTF-8\">\n" +
+          "  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n" +
+          "  <title>API Documentation</title>\n" +
+          "</head>\n" +
+          "<body>\n" +
+          "<h1>API Documentation</h1>\n" +
+          "<p>Welcome to the API documentation. Here are the available endpoints:</p>\n" +
+          "<ul>\n" +
+          "  <li><strong>GET</strong> /api/getUser - Get all users</li>\n" +
+          "  <li><strong>POST</strong> /api/createUser - Create a new user</li>\n" +
+          "  <li><strong>PUT</strong> /api/updateUser - Update a user</li>\n" +
+          "  <li><strong>DELETE</strong> /api/deleteUser - Delete a user</li>\n" +
+          "  <li><strong>GET</strong> /api/getEpisode - Get all episodes</li>\n" +
+          "  <li><strong>POST</strong> /api/createEpisode - Create a new episode</li>\n" +
+          "  <li><strong>PUT</strong> /api/updateEpisode - Update an episode</li>\n" +
+          "  <li><strong>DELETE</strong> /api/deleteEpisode - Delete an episode</li>\n" +
+          "  <li><strong>GET</strong> /api/getHealthRecords - Get all health records</li>\n" +
+          "  <li><strong>POST</strong> /api/createHealthRecords - Create a new health record</li>\n" +
+          "  <li><strong>PUT</strong> /api/updateHealthRecords - Update a health record</li>\n" +
+          "  <li><strong>DELETE</strong> /api/deleteHealthRecords - Delete a health record</li>\n" +
+          "  <li><strong>GET</strong> /api/complaintsByAge - Get complaints by age</li>\n" +
+          "  <li><strong>GET</strong> /api/episodeByTime - Get episode counts by time unit</li>\n" +
+          "</ul>\n" +
+          "</body>\n" +
+          "</html>"
+      );
+    });
+
+
     router.get("/api/getUser").handler(this::handleGetAllUsers);
     router.post("/api/createUser").handler(this::handleCreateUser);
     router.put("/api/updateUser").handler(this::handleUpdateUser);
@@ -58,12 +88,33 @@ public class MainVerticle extends AbstractVerticle {
     router.get("/api/episodeByTime").handler(this::handleGetEpisodesCount);
 
 
+
     vertx.createHttpServer().requestHandler(router).listen(8000);
+
   }
 
-  public void easy(RoutingContext routingContext) {
-    routingContext.response().end("Hello");
+  private void createTables() {
+    sqlClient.getConnection(res -> {
+      if (res.succeeded()) {
+        SQLConnection connection = res.result();
+        connection.batch(Arrays.asList(
+          "CREATE TABLE IF NOT EXISTS users (user_id SERIAL PRIMARY KEY, name VARCHAR(255) NOT NULL, age INT NOT NULL);",
+          "CREATE TABLE IF NOT EXISTS health_records (record_id SERIAL PRIMARY KEY, user_id INT REFERENCES users(user_id), health_info JSONB);",
+          "CREATE TABLE IF NOT EXISTS episodes (episode_id SERIAL PRIMARY KEY, user_id INT REFERENCES users(user_id), timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP, complaint_type VARCHAR(255) NOT NULL, treatment VARCHAR(255));"
+        ), createHandler -> {
+          if (createHandler.succeeded()) {
+            System.out.println("Tables created successfully");
+          } else {
+            System.err.println("Error creating tables: " + createHandler.cause().getMessage());
+          }
+          connection.close();
+        });
+      } else {
+        System.err.println("Unable to connect to the database: " + res.cause().getMessage());
+      }
+    });
   }
+
 
   private void handleGetAllUsers(RoutingContext routingContext) {
     sqlClient.getConnection(res -> {
@@ -127,7 +178,6 @@ public class MainVerticle extends AbstractVerticle {
   private void handleUpdateUser(RoutingContext routingContext) {
     JsonObject updatedUser = routingContext.getBodyAsJson();
 
-    // Assuming your JSON input looks like: {"id": 1, "name": "Updated Name", "age": 30}
 
     int userId = updatedUser.getInteger("id");
     String updatedName = updatedUser.getString("name");
